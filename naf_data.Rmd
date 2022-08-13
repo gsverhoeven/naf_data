@@ -193,3 +193,13 @@ df %>%
 
 ```
 
+```{r}
+df %>% 
+  group_by(Race) %>%
+  summarise(perc_win = mean(Wins), n = n()) %>%
+  arrange(-perc_win) %>%
+  filter(n > 100) %>%
+  ggplot(aes(x = n, y = perc_win, label = Race )) +
+  geom_point() +
+  geom_label()
+```
