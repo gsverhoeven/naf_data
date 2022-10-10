@@ -203,3 +203,66 @@ df %>%
   geom_point() +
   geom_label()
 ```
+
+
+# Eurobowl team rosters
+
+```{r}
+library(tidyverse)
+
+eb_df <- read.csv("tableau_downloads/eurobowl_rosters/Races_Full Data_data.csv")
+eb_df$Full.Path <- NULL
+
+eb_df <- eb_df %>% 
+  filter(Tournament == "Eurobowl") %>% 
+  arrange(File, Race) %>% 
+  filter(Country != "")
+```
+
+Check that we have 24 x 8 = 192 rosters:
+
+```{r}
+eb_df %>%
+  group_by(Coach, Country) %>%
+  summarise(n = n()) %>% arrange(Country)
+```
+
+Reproduceer top races:
+
+```{r}
+res <- eb_df %>%
+  group_by(Coach, Race) %>%
+  summarise(n = n()) %>% 
+  group_by(Race) %>%
+  summarise(cnt = n()) %>%
+  arrange(-cnt)
+
+ggplot(res, aes(x = reorder(Race, cnt), y = cnt)) +
+  geom_point() +
+  expand_limits(y = 0) +
+  coord_flip()
+```
+
+```{r}
+races <- unique(eb_df$Race)
+
+for(i in 1:length(races)){
+  
+  df <- eb_df %>% 
+    filter(Type == "Players" & Race == races[i]) %>%
+    group_by(Description, Coach, Country) %>%
+    summarise(n = n())
+  
+  gp <- ggplot(df, aes(x = Country, y = Description)) +
+    geom_tile(aes(fill = n), color = "black") +
+    geom_text(aes(label = n), color = "white") +
+    scale_fill_gradient(low = "light blue", high = "blue", na.value = "white") +
+    coord_fixed() +
+    theme(legend.position = "none") +
+    ggtitle(paste0("Eurobowl 2022 " , races[i], " rosters")) + 
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    theme(panel.background = element_rect(fill = "white"))
+  print(gp)
+}
+```
+# PM toevoegen historische landen ranking 2019
