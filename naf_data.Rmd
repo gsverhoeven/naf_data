@@ -9,11 +9,16 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Read in NAF dataset july 2022
+
+We have 46K BB2020 tourney matches.
+
 ```{r}
 library(tidyverse)
 
 df <- read.csv("tableau_downloads/Race Success and Popularity (2)_Full Data_data.csv")
 ```
+# Dataprep, add NAF ranking bins
 
 ```{r}
 head(df)
@@ -22,6 +27,7 @@ df$Date <- as.Date(df$Date, "%m/%d/%Y")
 
 df$Rank_bin <- cut(df$Rank, breaks = c(-Inf, 120, 130, 140, 150, 160, 170, 180, 190, Inf))
 ```
+# analyses, check large Tournaments with EB 2022 ruleset
 
 ```{r}
 tourney_loc <- df %>% 
@@ -54,6 +60,11 @@ df %>%
   group_by(Result, TDs.Net, Wins) %>%
   summarise(n())
 ```
+
+# Check winrates by Race
+
+High Elf indeed high in the rankings, as well as Tomb Kings.
+
 ```{r}
 df %>% 
   filter(Rank < 180) %>%
@@ -61,6 +72,11 @@ df %>%
   summarise(perc_win = mean(Wins), n()) %>%
   arrange(-perc_win)
 ```
+
+# CHeck for a few races what the win % by NAF ranking are
+
+This might inform on which races are difficult to master.
+
 ```{r}
 df %>% 
   filter(Race == "High Elf") %>%
@@ -68,6 +84,7 @@ df %>%
   summarise(perc_win = mean(Wins), n()) %>%
   arrange(-Rank_bin)
 ```
+
 ```{r}
 df %>% 
   filter(Race == "Orc") %>%
@@ -84,7 +101,8 @@ df %>%
   summarise(perc_win = mean(Wins), n()) %>%
   arrange(-Rank_bin)
 ```
-
+Ok so strong coaches have succes with High Elf, more so than with Wood Elf.
+Who are those coaches?
 
 ```{r}
 df %>% 
@@ -94,7 +112,7 @@ df %>%
   arrange(-n)
 ```
 
-
+Which tournaments had high win rates for High Elf?
 
 ```{r}
 df %>% 
@@ -116,6 +134,7 @@ df %>%
   arrange(-n)
 ```
 
+# Check a few tourneys with high win rates for High Elf
 
 This tournament used Eurobowl 2022 rules. Under those rules, high elves are Tier 4. 
 
@@ -166,6 +185,10 @@ df %>%
 df %>% 
   filter(Tournament.Name =="Coupe des voraces 4")
 ```
+
+# Label tourneys that use Malta / Eurobowl / Europen ruleset
+
+
 ```{r}
 df$eurobowl_rulepack1 <- grepl("[Mm]alta", df$Description)
 df$eurobowl_rulepack2 <- grepl("[Ee]urobowl", df$Description)
@@ -177,6 +200,9 @@ df$eurobowl_rulepack <- with(df, eurobowl_rulepack1 + eurobowl_rulepack2 + eurob
 ```{r}
 table(df$eurobowl_rulepack)
 ```
+
+Have some 2K matches under EB ruleset.
+
 ```{r}
 df %>% 
   filter(eurobowl_rulepack > 0) %>%
@@ -239,6 +265,7 @@ res <- eb_df %>%
 
 ggplot(res, aes(x = reorder(Race, cnt), y = cnt)) +
   geom_point() +
+  geom_segment(aes(xend = reorder(Race, cnt), yend = 0)) +
   expand_limits(y = 0) +
   coord_flip()
 ```
@@ -265,4 +292,62 @@ for(i in 1:length(races)){
   print(gp)
 }
 ```
-# PM toevoegen historische landen ranking 2019
+# Add historical Eurobowl ranking
+
+```{r}
+country_ranking <- read.csv("country_rankings.csv")
+
+country_ranking$Country <- gsub('^.', '', country_ranking$Country)
+
+res <- country_ranking %>% 
+  group_by(Country) %>%
+  summarise(rank = mean(Rank)) %>%
+  arrange(rank) %>%
+  mutate(avg_rank = 1:n()) %>%
+  select(Country, avg_rank)
+
+eb_df <- eb_df %>%
+  left_join(res, by = "Country")
+```
+
+
+# skill plot
+
+```{r}
+races <- unique(eb_df$Race)
+
+for(i in 1:length(races)){
+
+    df <- eb_df %>% 
+    filter(Type == "Players" & Race == races[i]) %>%
+    mutate(Desc_skill.1 = paste0(Description, "_", Skill.1, "_", Skill.2)) %>%
+    mutate(Skill.1 = ifelse(Skill.1 == "", "None", Skill.1)) %>%
+    mutate(Skill.1 = paste0(Skill.1, "_", Skill.2)) %>%
+    group_by(Desc_skill.1, Skill.1, Description, Coach, Country, avg_rank) %>%
+    #mutate(Skill.1 = as.factor(Skill.1)) %>%
+    summarise(n = n()) %>%
+    arrange(Coach)
+  
+    gp <- ggplot(df, aes(x = reorder(Country, avg_rank), y = reorder(Desc_skill.1, Description))) +
+      geom_tile(aes(fill = Skill.1), color = "black") +
+      geom_text(aes(label = n), color = "white") +
+      coord_fixed() +
+      ggtitle(paste0("Eurobowl 2022 " , races[i], " rosters")) + 
+      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+      theme(panel.background = element_rect(fill = "white")) +
+      labs(y = "", x = "Country")
+    print(gp)
+    
+  
+}
+```
+
+```{r}
+df <- eb_df %>% 
+  filter(Type == "Players" & Race == "Orc") %>%
+  filter(Skill.1 != "") %>%
+  group_by()
+  summarise()
+```
+
+# PM add hierarchical clustering of team rosters
