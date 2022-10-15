@@ -270,28 +270,6 @@ ggplot(res, aes(x = reorder(Race, cnt), y = cnt)) +
   coord_flip()
 ```
 
-```{r}
-races <- unique(eb_df$Race)
-
-for(i in 1:length(races)){
-  
-  df <- eb_df %>% 
-    filter(Type == "Players" & Race == races[i]) %>%
-    group_by(Description, Coach, Country) %>%
-    summarise(n = n())
-  
-  gp <- ggplot(df, aes(x = Country, y = Description)) +
-    geom_tile(aes(fill = n), color = "black") +
-    geom_text(aes(label = n), color = "white") +
-    scale_fill_gradient(low = "light blue", high = "blue", na.value = "white") +
-    coord_fixed() +
-    theme(legend.position = "none") +
-    ggtitle(paste0("Eurobowl 2022 " , races[i], " rosters")) + 
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-    theme(panel.background = element_rect(fill = "white"))
-  print(gp)
-}
-```
 # Add historical Eurobowl ranking
 
 ```{r}
@@ -310,10 +288,38 @@ eb_df <- eb_df %>%
   left_join(res, by = "Country")
 ```
 
+```{r}
+races <- unique(eb_df$Race)
+
+for(i in 1:length(races)){
+  
+  df <- eb_df %>% 
+    filter(Type == "Players" & Race == races[i]) %>%
+    group_by(Description, Coach, Country, avg_rank) %>%
+    summarise(n = n())
+  
+  gp <- ggplot(df, aes(x = reorder(Country, avg_rank), y = Description)) +
+    geom_tile(aes(fill = n), color = "black") +
+    geom_text(aes(label = n), color = "white") +
+    scale_fill_gradient(low = "light blue", high = "blue", na.value = "white") +
+    coord_fixed() +
+    theme(legend.position = "none") +
+    ggtitle(paste0("Eurobowl 2022 " , races[i], " rosters")) + 
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    theme(panel.background = element_rect(fill = "white"))
+    labs(x = "Country")
+  
+  plotname <- paste0("output/eb2022_position_plot_", races[i], ".png")
+  print(plotname)
+  ggsave(plotname, gp)
+}
+```
+
+
 
 # skill plot
 
-```{r}
+```{r warning = FALSE}
 races <- unique(eb_df$Race)
 
 for(i in 1:length(races)){
@@ -324,7 +330,6 @@ for(i in 1:length(races)){
     mutate(Skill.1 = ifelse(Skill.1 == "", "None", Skill.1)) %>%
     mutate(Skill.1 = paste0(Skill.1, "_", Skill.2)) %>%
     group_by(Desc_skill.1, Skill.1, Description, Coach, Country, avg_rank) %>%
-    #mutate(Skill.1 = as.factor(Skill.1)) %>%
     summarise(n = n()) %>%
     arrange(Coach)
   
@@ -336,12 +341,18 @@ for(i in 1:length(races)){
       theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
       theme(panel.background = element_rect(fill = "white")) +
       labs(y = "", x = "Country")
-    print(gp)
+    plotname <- paste0("output/eb2022_skill_plot_", races[i], ".png")
+    print(plotname)
+    ggsave(plotname, gp)
     
   
 }
 ```
 
+
+fix Warning in mean.default(X[[i]], ...) :
+  argument is not numeric or logical: returning NA
+  
 ```{r}
 df <- eb_df %>% 
   filter(Type == "Players" & Race == "Orc") %>%
