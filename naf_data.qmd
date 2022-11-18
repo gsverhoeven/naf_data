@@ -1,5 +1,5 @@
 ---
-title: "Untitled"
+title: "Analyzing NAF data"
 author: "Gertjan Verhoeven"
 date: '2022-07-10'
 output: html_document
@@ -362,3 +362,5 @@ df <- eb_df %>%
 ```
 
 # PM add hierarchical clustering of team rosters
+
+# PM add Eurobowl outcomes (Coach and Team standing)
