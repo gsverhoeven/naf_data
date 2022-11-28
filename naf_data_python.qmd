@@ -1,0 +1,358 @@
+---
+title: "Analyzing NAF data"
+author: "Gertjan Verhoeven"
+date: '2022-07-10'
+jupyter: python3
+output: html_document
+---
+
+# Read in NAF dataset july 2022
+
+We have 46K BB2020 tourney matches.
+
+```{python}
+import pandas as pd
+
+df = pd.read_csv("tableau_downloads/Race Success and Popularity (2)_Full Data_data.csv")
+```
+# Dataprep, add NAF ranking bins
+
+```{python}
+df.info()
+```
+
+
+df$Date <- as.Date(df$Date, "%m/%d/%Y")
+
+df$Rank_bin <- cut(df$Rank, breaks = c(-Inf, 120, 130, 140, 150, 160, 170, 180, 190, Inf))
+```
+# analyses, check large Tournaments with EB 2022 ruleset
+
+```{r}
+tourney_loc <- df %>% 
+  filter(Nation != "" & Tournament.Id != "") %>%
+  group_by(Tournament.Id, Nation) %>%
+  summarise(n_games_by_nations = n()) %>%
+  slice_max(n_games_by_nations, n = 1, with_ties = FALSE) %>%
+  rename(Tournament.Country = Nation)
+
+df <- df %>%
+  left_join(tourney_loc, by = "Tournament.Id")
+```
+
+
+```{r}
+res <- df %>% 
+  group_by(Tournament.Id, Tournament.Name, Tournament.Country) %>%
+  summarise(n = n(), date = min(Date), n_coaches = n_distinct(Coach))
+```
+
+```{r fig.width = 10, fig.height = 12}
+ggplot(res, aes(x = date, y = n_coaches, label = Tournament.Name)) +
+  geom_point() +
+  geom_label() +
+  expand_limits(y=0) + 
+  facet_wrap(~Tournament.Country, ncol = 5, scales = "free_y")
+```
+```{r}
+df %>% 
+  group_by(Result, TDs.Net, Wins) %>%
+  summarise(n())
+```
+
+# Check winrates by Race
+
+High Elf indeed high in the rankings, as well as Tomb Kings.
+
+```{r}
+df %>% 
+  filter(Rank < 180) %>%
+  group_by(Race) %>%
+  summarise(perc_win = mean(Wins), n()) %>%
+  arrange(-perc_win)
+```
+
+# CHeck for a few races what the win % by NAF ranking are
+
+This might inform on which races are difficult to master.
+
+```{r}
+df %>% 
+  filter(Race == "High Elf") %>%
+  group_by(Rank_bin) %>%
+  summarise(perc_win = mean(Wins), n()) %>%
+  arrange(-Rank_bin)
+```
+
+```{r}
+df %>% 
+  filter(Race == "Orc") %>%
+  group_by(Rank_bin) %>%
+  summarise(perc_win = mean(Wins), n()) %>%
+  arrange(-Rank_bin)
+```
+
+
+```{r}
+df %>% 
+  filter(Race == "Wood Elf") %>%
+  group_by(Rank_bin) %>%
+  summarise(perc_win = mean(Wins), n()) %>%
+  arrange(-Rank_bin)
+```
+Ok so strong coaches have succes with High Elf, more so than with Wood Elf.
+Who are those coaches?
+
+```{r}
+df %>% 
+  filter(Race == "High Elf" & Rank >= 190) %>%
+  group_by(Coach, Nation, Tournament.Name) %>%
+  summarise(perc_win = mean(Wins), n = n()) %>%
+  arrange(-n)
+```
+
+Which tournaments had high win rates for High Elf?
+
+```{r}
+df %>% 
+  filter(Race == "High Elf") %>%
+  group_by(Tournament.Name) %>%
+  summarise(perc_win = mean(Wins), n = n()) %>%
+  mutate(label2 = ifelse(n > 10, Tournament.Name, NA)) %>%
+  arrange(-n) %>%
+  ggplot(aes(x = n, y = perc_win, label = label2)) + 
+  geom_point() +
+  geom_label()
+```
+
+```{r}
+df %>% 
+  filter(Race == "High Elf") %>%
+  group_by(Tournament.Name) %>%
+  summarise(perc_win = mean(Wins), n = n()) %>%
+  arrange(-n)
+```
+
+# Check a few tourneys with high win rates for High Elf
+
+This tournament used Eurobowl 2022 rules. Under those rules, high elves are Tier 4. 
+
+https://web.archive.org/web/20220217093712/http://hammabowl.de/turnierinfos-2
+
+
+```{r}
+df %>% 
+  filter(Tournament.Name =="HammaBowl V") %>%
+  group_by(Tournament.Country, Coach, Race) %>%
+  summarise(perc_win = mean(Wins), n = n()) %>%
+  arrange(-perc_win)
+```
+
+
+```{r}
+df %>% 
+  filter(Tournament.Name =="UK Team Challenge VII") %>%
+  group_by(Tournament.Country, Coach, Race) %>%
+  summarise(perc_win = mean(Wins), n = n()) %>%
+  arrange(-perc_win)
+```
+```{r}
+df %>% 
+  filter(Tournament.Name =="UK Team Challenge VII") %>%
+  group_by(Race) %>%
+  summarise(perc_win = mean(Wins), n = n()) %>%
+  arrange(-perc_win)
+```
+
+Also here High Elf are in a low tier, allowing more skills.
+
+https://www.bbuktc.com/rules/
+
+Tournament in Lyon, also using Euroopen rules. So High Elves tier 4 and access to Star players.
+
+http://teamfrancebb.1fr1.net/t7449-la-coupe-des-voraces-iv-16-17-avril-2022
+
+
+```{r}
+df %>% 
+  filter(Tournament.Name =="Coupe des voraces 4") %>%
+  group_by(Coach, Race) %>%
+  summarise(perc_win = mean(Wins), n = n()) %>%
+  arrange(-perc_win)
+```
+```{r}
+df %>% 
+  filter(Tournament.Name =="Coupe des voraces 4")
+```
+
+# Label tourneys that use Malta / Eurobowl / Europen ruleset
+
+
+```{r}
+df$eurobowl_rulepack1 <- grepl("[Mm]alta", df$Description)
+df$eurobowl_rulepack2 <- grepl("[Ee]urobowl", df$Description)
+df$eurobowl_rulepack3 <- grepl("[Ee]ur[oO]pen", df$Description)
+
+df$eurobowl_rulepack <- with(df, eurobowl_rulepack1 + eurobowl_rulepack2 + eurobowl_rulepack3)
+```
+
+```{r}
+table(df$eurobowl_rulepack)
+```
+
+Have some 2K matches under EB ruleset.
+
+```{r}
+df %>% 
+  filter(eurobowl_rulepack > 0) %>%
+  group_by(Race) %>%
+  summarise(perc_win = mean(Wins), n = n()) %>%
+  arrange(-perc_win)
+```
+```{r}
+df %>% 
+  filter(eurobowl_rulepack > 0) %>%
+  group_by(Tournament.Name) %>%
+  summarise(n = n()) %>%
+  arrange(-n)
+
+```
+
+```{r}
+df %>% 
+  group_by(Race) %>%
+  summarise(perc_win = mean(Wins), n = n()) %>%
+  arrange(-perc_win) %>%
+  filter(n > 100) %>%
+  ggplot(aes(x = n, y = perc_win, label = Race )) +
+  geom_point() +
+  geom_label()
+```
+
+
+# Eurobowl team rosters
+
+```{r}
+library(tidyverse)
+
+eb_df <- read.csv("tableau_downloads/eurobowl_rosters/Races_Full Data_data.csv")
+eb_df$Full.Path <- NULL
+
+eb_df <- eb_df %>% 
+  filter(Tournament == "Eurobowl") %>% 
+  arrange(File, Race) %>% 
+  filter(Country != "")
+```
+
+Check that we have 24 x 8 = 192 rosters:
+
+```{r}
+eb_df %>%
+  group_by(Coach, Country) %>%
+  summarise(n = n()) %>% arrange(Country)
+```
+
+Reproduceer top races:
+
+```{r}
+res <- eb_df %>%
+  group_by(Coach, Race) %>%
+  summarise(n = n()) %>% 
+  group_by(Race) %>%
+  summarise(cnt = n()) %>%
+  arrange(-cnt)
+
+ggplot(res, aes(x = reorder(Race, cnt), y = cnt)) +
+  geom_point() +
+  geom_segment(aes(xend = reorder(Race, cnt), yend = 0)) +
+  expand_limits(y = 0) +
+  coord_flip()
+```
+
+# Add historical Eurobowl ranking
+
+```{r}
+country_ranking <- read.csv("country_rankings.csv")
+
+country_ranking$Country <- gsub('^.', '', country_ranking$Country)
+
+res <- country_ranking %>% 
+  group_by(Country) %>%
+  summarise(rank = mean(Rank)) %>%
+  arrange(rank) %>%
+  mutate(avg_rank = 1:n()) %>%
+  select(Country, avg_rank)
+
+eb_df <- eb_df %>%
+  left_join(res, by = "Country")
+```
+
+```{r}
+races <- unique(eb_df$Race)
+
+for(i in 1:length(races)){
+  
+  df <- eb_df %>% 
+    filter(Type == "Players" & Race == races[i]) %>%
+    group_by(Description, Coach, Country, avg_rank) %>%
+    summarise(n = n())
+  
+  gp <- ggplot(df, aes(x = reorder(Country, avg_rank), y = Description)) +
+    geom_tile(aes(fill = n), color = "black") +
+    geom_text(aes(label = n), color = "white") +
+    scale_fill_gradient(low = "light blue", high = "blue", na.value = "white") +
+    coord_fixed() +
+    theme(legend.position = "none") +
+    ggtitle(paste0("Eurobowl 2022 " , races[i], " rosters")) + 
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    theme(panel.background = element_rect(fill = "white"))
+    labs(x = "Country")
+  
+  plotname <- paste0("output/eb2022_position_plot_", races[i], ".png")
+  print(plotname)
+  ggsave(plotname, gp)
+}
+```
+
+
+
+# skill plot
+
+```{r warning = FALSE}
+races <- unique(eb_df$Race)
+
+for(i in 1:length(races)){
+
+    df <- eb_df %>% 
+    filter(Type == "Players" & Race == races[i]) %>%
+    mutate(Desc_skill.1 = paste0(Description, "_", Skill.1, "_", Skill.2)) %>%
+    mutate(Skill.1 = ifelse(Skill.1 == "", "None", Skill.1)) %>%
+    mutate(Skill.1 = paste0(Skill.1, "_", Skill.2)) %>%
+    group_by(Desc_skill.1, Skill.1, Description, Coach, Country, avg_rank) %>%
+    summarise(n = n()) %>%
+    arrange(Coach)
+  
+    gp <- ggplot(df, aes(x = reorder(Country, avg_rank), y = reorder(Desc_skill.1, Description))) +
+      geom_tile(aes(fill = Skill.1), color = "black") +
+      geom_text(aes(label = n), color = "white") +
+      coord_fixed() +
+      ggtitle(paste0("Eurobowl 2022 " , races[i], " rosters")) + 
+      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+      theme(panel.background = element_rect(fill = "white")) +
+      labs(y = "", x = "Country")
+    plotname <- paste0("output/eb2022_skill_plot_", races[i], ".png")
+    print(plotname)
+    ggsave(plotname, gp)
+    
+  
+}
+```
+
+
+fix Warning in mean.default(X[[i]], ...) :
+  argument is not numeric or logical: returning NA
+  
+
+# PM add hierarchical clustering of team rosters
+
+# PM add Eurobowl outcomes (Coach and Team standing)
